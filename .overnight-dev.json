@@ -1,0 +1,11 @@
+{
+  "testCommand": "python test_qwen25_coder.py",
+  "lintCommand": "python -m py_compile interpreter_source/__init__.py",
+  "requireCoverage": false,
+  "minCoverage": 0,
+  "autoFix": false,
+  "maxAttempts": 50,
+  "stopOnMorning": true,
+  "morningHour": 7,
+  "description": "LocalAgent - Open Interpreter fork with local model optimization"
+}
