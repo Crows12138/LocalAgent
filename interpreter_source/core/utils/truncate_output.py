@@ -1,4 +1,7 @@
-def truncate_output(data, max_output_chars=2800, add_scrollbars=False):
+from ..constants import DEFAULT_MAX_OUTPUT_CHARS
+
+
+def truncate_output(data, max_output_chars=DEFAULT_MAX_OUTPUT_CHARS, add_scrollbars=False):
     # if "@@@DO_NOT_TRUNCATE@@@" in data:
     #     return data
 

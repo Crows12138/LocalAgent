@@ -17,6 +17,7 @@ from .computer.computer import Computer
 from .default_system_message import default_system_message
 from .llm.llm import Llm
 from .respond import respond
+from .constants import DEFAULT_MAX_OUTPUT_CHARS
 from .utils.telemetry import send_telemetry
 from .utils.truncate_output import truncate_output
 
@@ -46,7 +47,7 @@ class OpenInterpreter:
         auto_run=False,
         verbose=False,
         debug=False,
-        max_output=2800,
+        max_output=DEFAULT_MAX_OUTPUT_CHARS,
         safe_mode="off",
         shrink_images=True,
         loop=False,

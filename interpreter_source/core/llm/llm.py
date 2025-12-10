@@ -22,6 +22,7 @@ from .run_text_llm import run_text_llm
 # from .run_function_calling_llm import run_function_calling_llm
 from .run_tool_calling_llm import run_tool_calling_llm
 from .utils.convert_to_openai_messages import convert_to_openai_messages
+from ..constants import DEFAULT_CONTEXT_WINDOW, CONTEXT_WINDOW_BUFFER, LLM_MAX_RETRY_ATTEMPTS
 
 # Create or get the logger
 logger = logging.getLogger("LiteLLM")
@@ -217,8 +218,8 @@ class Llm:
         try:
             if self.context_window and self.max_tokens:
                 trim_to_be_this_many_tokens = (
-                    self.context_window - self.max_tokens - 25
-                )  # arbitrary buffer
+                    self.context_window - self.max_tokens - CONTEXT_WINDOW_BUFFER
+                )
                 messages = tt.trim(
                     messages,
                     system_message=system_message,
@@ -261,7 +262,7 @@ Continuing...
                             """
                             )
                     messages = tt.trim(
-                        messages, system_message=system_message, max_tokens=8000
+                        messages, system_message=system_message, max_tokens=DEFAULT_CONTEXT_WINDOW
                     )
         except:
             # If we're trimming messages, this won't work.
@@ -435,7 +436,7 @@ def fixed_litellm_completions(**params):
     params["model"] = params["model"].replace(":latest", "")
 
     # Run completion
-    attempts = 4
+    attempts = LLM_MAX_RETRY_ATTEMPTS
     first_error = None
 
     params["num_retries"] = 0
