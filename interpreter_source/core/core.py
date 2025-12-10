@@ -2,11 +2,14 @@
 This file defines the Interpreter class.
 It's the main file. `from interpreter import interpreter` will import an instance of this class.
 """
+from __future__ import annotations
+
 import json
 import os
 import threading
 import time
 from datetime import datetime
+from typing import Any, Dict, Generator, List, Optional, Union
 
 from ..terminal_interface.local_setup import local_setup
 from ..terminal_interface.terminal_interface import terminal_interface
@@ -145,7 +148,8 @@ class OpenInterpreter:
         """
         self = local_setup(self)
 
-    def wait(self):
+    def wait(self) -> List[Dict[str, Any]]:
+        """Wait for the interpreter to finish responding and return new messages."""
         while self.responding:
             time.sleep(0.2)
         # Return new messages
@@ -156,13 +160,19 @@ class OpenInterpreter:
         return not self.disable_telemetry and not self.offline
 
     @property
-    def will_contribute(self):
+    def will_contribute(self) -> bool:
         overrides = (
             self.offline or not self.conversation_history or self.disable_telemetry
         )
         return self.contribute_conversation and not overrides
 
-    def chat(self, message=None, display=True, stream=False, blocking=True):
+    def chat(
+        self,
+        message: Optional[Union[str, Dict[str, Any], List[Dict[str, Any]]]] = None,
+        display: bool = True,
+        stream: bool = False,
+        blocking: bool = True,
+    ) -> Optional[Union[List[Dict[str, Any]], Generator[Dict[str, Any], None, None]]]:
         try:
             self.responding = True
             if self.anonymous_telemetry:
@@ -215,7 +225,11 @@ class OpenInterpreter:
 
             raise
 
-    def _streaming_chat(self, message=None, display=True):
+    def _streaming_chat(
+        self,
+        message: Optional[Union[str, Dict[str, Any], List[Dict[str, Any]]]] = None,
+        display: bool = True,
+    ) -> Generator[Dict[str, Any], None, None]:
         # Sometimes a little more code -> a much better experience!
         # Display mode actually runs interpreter.chat(display=False, stream=True) from within the terminal_interface.
         # wraps the vanilla .chat(display=False) generator in a display.
@@ -295,7 +309,7 @@ class OpenInterpreter:
             "`interpreter.chat()` requires a display. Set `display=True` or pass a message into `interpreter.chat(message)`."
         )
 
-    def _respond_and_store(self):
+    def _respond_and_store(self) -> Generator[Dict[str, Any], None, None]:
         """
         Pulls from the respond stream, adding delimiters. Some things, like active_line, console, confirmation... these act specially.
         Also assembles new messages and adds them to `self.messages`.
@@ -428,19 +442,20 @@ class OpenInterpreter:
         except GeneratorExit:
             raise  # gotta pass this up!
 
-    def reset(self):
+    def reset(self) -> None:
+        """Reset the interpreter state, terminating all running processes."""
         self.computer.terminate()  # Terminates all languages
         self.computer._has_imported_computer_api = False  # Flag reset
         self.messages = []
         self.last_messages_count = 0
 
-    def display_message(self, markdown):
-        # This is just handy for start_script in profiles.
+    def display_message(self, markdown: str) -> None:
+        """Display a markdown message to the user."""
         if self.plain_text_display:
             print(markdown)
         else:
             display_markdown_message(markdown)
 
-    def get_oi_dir(self):
-        # Again, just handy for start_script in profiles.
+    def get_oi_dir(self) -> str:
+        """Get the Open Interpreter directory path."""
         return oi_dir

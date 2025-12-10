@@ -1,7 +1,22 @@
 from ..constants import DEFAULT_MAX_OUTPUT_CHARS
 
 
-def truncate_output(data, max_output_chars=DEFAULT_MAX_OUTPUT_CHARS, add_scrollbars=False):
+def truncate_output(
+    data: str,
+    max_output_chars: int = DEFAULT_MAX_OUTPUT_CHARS,
+    add_scrollbars: bool = False,
+) -> str:
+    """
+    Truncate output data to a maximum number of characters.
+
+    Args:
+        data: The output string to truncate
+        max_output_chars: Maximum characters to keep (default: 2800)
+        add_scrollbars: Whether to add scrollbar hint message
+
+    Returns:
+        Truncated string with truncation message if needed
+    """
     # if "@@@DO_NOT_TRUNCATE@@@" in data:
     #     return data
 
