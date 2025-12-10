@@ -130,7 +130,8 @@ class Llm:
                     self.supports_functions = True
                 else:
                     self.supports_functions = False
-            except:
+            except Exception:
+                # Model not recognized by litellm, assume no function calling support
                 self.supports_functions = False
 
         # Detect vision support
@@ -140,7 +141,8 @@ class Llm:
                     self.supports_vision = True
                 else:
                     self.supports_vision = False
-            except:
+            except Exception:
+                # Model not recognized by litellm, assume no vision support
                 self.supports_vision = False
 
         # Trim image messages if they're there

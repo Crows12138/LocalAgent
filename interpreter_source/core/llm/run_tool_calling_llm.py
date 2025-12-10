@@ -186,7 +186,6 @@ def run_tool_calling_llm(llm, request_params):
         if "tool_calls" in delta and delta["tool_calls"]:
             function_call_detected = True
 
-            # import pdb; pdb.set_trace()
             if len(delta["tool_calls"]) > 0 and delta["tool_calls"][0].function:
                 delta = {
                     # "id": delta["tool_calls"][0],
@@ -306,10 +305,5 @@ def run_tool_calling_llm(llm, request_params):
                         print("Arguments not a dict.")
 
     if os.getenv("INTERPRETER_REQUIRE_AUTHENTICATION", "False").lower() == "true":
-        print("function_call_detected", function_call_detected)
-        print("accumulated_review", accumulated_review)
         if function_call_detected and not accumulated_review:
-            print("WTF!!!!!!!!!")
-            # import pdb
-            # pdb.set_trace()
             raise Exception("Judge layer required but did not run.")

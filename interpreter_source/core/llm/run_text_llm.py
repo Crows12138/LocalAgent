@@ -55,7 +55,7 @@ def run_text_llm(llm, params):
                 if language == "":
                     if llm.interpreter.os == False:
                         language = "python"
-                    elif llm.interpreter.os == False:
+                    else:
                         # OS mode does this frequently. Takes notes with markdown code blocks
                         language = "text"
                 else:

@@ -192,12 +192,8 @@ def respond(interpreter):
                         interpreter.messages[-1][
                             "format"
                         ] = language  # So the LLM can see it.
-                    except:
-                        pass
-
-                # print(code)
-                # print("---")
-                # time.sleep(2)
+                    except (json.JSONDecodeError, KeyError, TypeError):
+                        pass  # Invalid JSON format, continue with original code
 
                 if code.strip().endswith("executeexecute"):
                     code = code.replace("executeexecute", "")
@@ -205,8 +201,8 @@ def respond(interpreter):
                         interpreter.messages[-1][
                             "content"
                         ] = code  # So the LLM can see it.
-                    except:
-                        pass
+                    except (KeyError, IndexError):
+                        pass  # Message structure issue, continue anyway
 
                 if code.replace("\n", "").replace(" ", "").startswith('{"language":'):
                     try:
@@ -220,8 +216,8 @@ def respond(interpreter):
                             interpreter.messages[-1][
                                 "format"
                             ] = language  # So the LLM can see it.
-                    except:
-                        pass
+                    except (json.JSONDecodeError, KeyError, TypeError):
+                        pass  # Invalid JSON format, continue with original code
 
                 if code.replace("\n", "").replace(" ", "").startswith("{language:"):
                     try:
@@ -238,8 +234,8 @@ def respond(interpreter):
                             interpreter.messages[-1][
                                 "format"
                             ] = language  # So the LLM can see it.
-                    except:
-                        pass
+                    except (json.JSONDecodeError, KeyError, TypeError):
+                        pass  # Invalid JSON format, continue with original code
 
                 if (
                     language == "text"
