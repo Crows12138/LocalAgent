@@ -4,11 +4,14 @@ import re
 import time
 import traceback
 
-os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"                                             
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 import litellm
 import openai
 
+from .logger import get_logger
 from .render_message import render_message
+
+logger = get_logger(__name__)
 
 
 def respond(interpreter):
@@ -166,7 +169,7 @@ def respond(interpreter):
 
         if interpreter.messages[-1]["type"] == "code":
             if interpreter.verbose:
-                print("Running code:", interpreter.messages[-1])
+                logger.debug("Running code: %s", interpreter.messages[-1])
 
             try:
                 # What language/code do you want to run?
@@ -176,7 +179,7 @@ def respond(interpreter):
                 if code.startswith("`\n"):
                     code = code[2:].strip()
                     if interpreter.verbose:
-                        print("Removing `\n")
+                        logger.debug("Removing leading backtick newline from code")
                     interpreter.messages[-1]["content"] = code  # So the LLM can see it.
 
                 # A common hallucination
