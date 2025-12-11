@@ -18,6 +18,7 @@ from ..terminal_interface.utils.local_storage_path import get_storage_path
 from ..terminal_interface.utils.oi_dir import oi_dir
 from .codebase import CodebaseIndexer
 from .computer.computer import Computer
+from .context import ContextManager, ContextBuilder
 from .git import GitManager
 from .config import InterpreterConfig
 from .default_system_message import default_system_message
@@ -161,6 +162,9 @@ class OpenInterpreter:
 
         # LocalAgent extension: Git integration
         self._git_manager: Optional[GitManager] = None
+
+        # LocalAgent extension: Context management
+        self._context_manager: Optional[ContextManager] = None
 
     def local_setup(self):
         """
@@ -759,6 +763,101 @@ class OpenInterpreter:
     def git(self) -> Optional[GitManager]:
         """Access the Git manager directly."""
         return self._git_manager
+
+    # =========================================================================
+    # LocalAgent Extension: Context Management
+    # =========================================================================
+
+    def enable_context(
+        self,
+        max_tokens: int = 8000,
+        auto_files: bool = True,
+        auto_codebase: bool = True,
+        auto_git: bool = False,
+    ) -> "OpenInterpreter":
+        """
+        Enable intelligent context management.
+
+        When enabled, the interpreter will automatically inject relevant
+        context (files, codebase, git) into conversations.
+
+        Args:
+            max_tokens: Maximum tokens for context
+            auto_files: Auto-inject mentioned files
+            auto_codebase: Auto-inject relevant code from indexed codebase
+            auto_git: Auto-inject git status
+
+        Returns:
+            self for chaining
+
+        Example:
+            interpreter.index_codebase("./my_project")
+            interpreter.enable_context()
+            interpreter.chat("fix the bug in auth.py")  # auth.py auto-loaded
+        """
+        self._context_manager = ContextManager(self)
+        self._context_manager.configure(
+            enabled=True,
+            max_tokens=max_tokens,
+            auto_inject_files=auto_files,
+            auto_inject_codebase=auto_codebase,
+            auto_inject_git=auto_git,
+        )
+        return self
+
+    def disable_context(self) -> "OpenInterpreter":
+        """Disable context management."""
+        if self._context_manager:
+            self._context_manager.disable()
+        return self
+
+    def build_context(self) -> ContextBuilder:
+        """
+        Get a context builder for manual context construction.
+
+        Returns:
+            New ContextBuilder instance
+
+        Example:
+            ctx = interpreter.build_context()
+            ctx.add_file("src/main.py")
+            ctx.add_custom("Important: use async functions")
+            context_str = ctx.build()
+        """
+        return ContextBuilder(max_tokens=8000)
+
+    def prepare_context(self, message: str) -> str:
+        """
+        Prepare context for a message.
+
+        Args:
+            message: User message
+
+        Returns:
+            Context string
+        """
+        if self._context_manager and self._context_manager.config.enabled:
+            return self._context_manager.prepare_context(message)
+        return ""
+
+    def inject_context(self, message: str) -> str:
+        """
+        Inject context into a message.
+
+        Args:
+            message: User message
+
+        Returns:
+            Message with context prepended
+        """
+        if self._context_manager and self._context_manager.config.enabled:
+            return self._context_manager.inject_context(message)
+        return message
+
+    @property
+    def context(self) -> Optional[ContextManager]:
+        """Access the context manager directly."""
+        return self._context_manager
 
     @property
     def config(self) -> InterpreterConfig:
