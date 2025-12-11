@@ -53,7 +53,8 @@ def run_text_llm(llm, params):
         accumulated_block += content
 
         # Wait if we might be in the middle of typing "```"
-        if accumulated_block.endswith("`") or accumulated_block.endswith("``"):
+        # But don't wait if we already have a complete "```"
+        if (accumulated_block.endswith("`") or accumulated_block.endswith("``")) and "```" not in accumulated_block:
             continue
 
         # Did we just enter a code block?
@@ -79,17 +80,20 @@ def run_text_llm(llm, params):
             # Extract the code before the closing ```
             code_content = accumulated_block.split("```")[0]
 
-            # Parse out the language if we haven't yet
-            if language is None and "\n" in code_content:
+            # Always strip the first line if it's a language identifier
+            if "\n" in code_content:
                 first_line = code_content.split("\n")[0].strip()
-                if first_line:
-                    # Clean the language identifier
-                    language = "".join(char for char in first_line if char.isalpha()).lower()
-                    if not language:
-                        language = "python"  # Default
+                # Check if first line is a language identifier (only letters)
+                first_line_clean = "".join(char for char in first_line if char.isalpha()).lower()
+                if first_line_clean and first_line_clean == first_line.strip().lower():
+                    # First line is just a language identifier, strip it
+                    if language is None:
+                        language = first_line_clean or "python"
                     code_content = "\n".join(code_content.split("\n")[1:])
-                else:
-                    language = "python" if not llm.interpreter.os else "text"
+                elif not first_line:
+                    # Empty first line, strip it
+                    if language is None:
+                        language = "python" if not llm.interpreter.os else "text"
                     code_content = "\n".join(code_content.split("\n")[1:])
 
             # Yield the final code content
@@ -146,12 +150,18 @@ def run_text_llm(llm, params):
                     code_portion = ""
 
                 # Only yield the new content from this chunk
+                # Make sure we don't include closing ``` in the content
                 if content and language not in content:
-                    yield {
-                        "type": "code",
-                        "format": language,
-                        "content": content,
-                    }
+                    # Strip closing backticks if present
+                    clean_content = content
+                    if "```" in clean_content:
+                        clean_content = clean_content.split("```")[0]
+                    if clean_content:
+                        yield {
+                            "type": "code",
+                            "format": language,
+                            "content": clean_content,
+                        }
 
         # If we're not in a code block, buffer message content
         elif not inside_code_block:
