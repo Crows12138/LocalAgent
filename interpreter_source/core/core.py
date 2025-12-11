@@ -20,6 +20,7 @@ from .codebase import CodebaseIndexer
 from .computer.computer import Computer
 from .context import ContextManager, ContextBuilder
 from .git import GitManager
+from .testing import TestManager, TestResult
 from .config import InterpreterConfig
 from .prompts import default_system_message
 from .llm.llm import Llm
@@ -165,6 +166,9 @@ class OpenInterpreter:
 
         # LocalAgent extension: Context management
         self._context_manager: Optional[ContextManager] = None
+
+        # LocalAgent extension: Test management
+        self._test_manager: Optional[TestManager] = None
 
     def local_setup(self):
         """
@@ -858,6 +862,177 @@ class OpenInterpreter:
     def context(self) -> Optional[ContextManager]:
         """Access the context manager directly."""
         return self._context_manager
+
+    # =========================================================================
+    # LocalAgent Extension: Test Management
+    # =========================================================================
+
+    def init_tests(self, project_path: Optional[str] = None, timeout: int = 300) -> "OpenInterpreter":
+        """
+        Initialize test management for a project.
+
+        Automatically detects test frameworks (pytest, jest, vitest, etc.)
+        and provides methods to run and manage tests.
+
+        Args:
+            project_path: Path to project (defaults to cwd)
+            timeout: Test execution timeout in seconds
+
+        Returns:
+            self for chaining
+
+        Example:
+            interpreter.init_tests("./my_project")
+            result = interpreter.run_tests()
+            print(result.get_summary())
+        """
+        import os
+        path = project_path or os.getcwd()
+        self._test_manager = TestManager(path, timeout=timeout)
+        self._test_manager.detect()
+        return self
+
+    def run_tests(
+        self,
+        test_filter: Optional[str] = None,
+        verbose: bool = False,
+    ) -> Optional[TestResult]:
+        """
+        Run tests for the project.
+
+        Args:
+            test_filter: Optional filter (file path or test name pattern)
+            verbose: Include verbose output
+
+        Returns:
+            TestResult with test outcomes
+
+        Example:
+            # Run all tests
+            result = interpreter.run_tests()
+
+            # Run specific file
+            result = interpreter.run_tests("tests/test_auth.py")
+
+            # Run tests matching pattern
+            result = interpreter.run_tests("-k test_login")  # pytest
+        """
+        if not self._test_manager:
+            self.init_tests()
+
+        if test_filter:
+            # Check if it's a file path or a pattern
+            if test_filter.endswith(".py") or test_filter.endswith(".js") or test_filter.endswith(".ts"):
+                return self._test_manager.run_file(test_filter)
+            else:
+                return self._test_manager.run_pattern(test_filter)
+
+        return self._test_manager.run(verbose=verbose)
+
+    def run_tests_for_file(self, test_file: str) -> Optional[TestResult]:
+        """
+        Run tests in a specific file.
+
+        Args:
+            test_file: Path to test file
+
+        Returns:
+            TestResult
+        """
+        if not self._test_manager:
+            self.init_tests()
+
+        return self._test_manager.run_file(test_file)
+
+    def run_affected_tests(self, changed_files: List[str]) -> Optional[TestResult]:
+        """
+        Run tests affected by file changes.
+
+        Intelligently finds and runs tests related to the changed files.
+
+        Args:
+            changed_files: List of changed file paths
+
+        Returns:
+            TestResult
+
+        Example:
+            # After modifying some files
+            result = interpreter.run_affected_tests(["src/auth.py", "src/utils.py"])
+        """
+        if not self._test_manager:
+            self.init_tests()
+
+        return self._test_manager.run_affected(changed_files)
+
+    def verify_changes(self, changed_files: List[str]) -> Dict[str, Any]:
+        """
+        Verify code changes by running related tests.
+
+        Args:
+            changed_files: List of files that were changed
+
+        Returns:
+            Dict with verification results including:
+            - has_tests: Whether project has tests
+            - verified: Whether verification was performed
+            - tests_passed: Whether all tests passed
+            - result: TestResult object
+            - message: Summary message
+        """
+        if not self._test_manager:
+            self.init_tests()
+
+        return self._test_manager.verify_changes(changed_files)
+
+    def get_test_summary(self) -> str:
+        """
+        Get a summary of test status.
+
+        Returns:
+            Human-readable test summary
+        """
+        if not self._test_manager:
+            self.init_tests()
+
+        summary = self._test_manager.get_summary()
+        return summary.get_overview()
+
+    def get_test_files(self) -> List[str]:
+        """
+        Get list of test files in the project.
+
+        Returns:
+            List of test file paths
+        """
+        if not self._test_manager:
+            self.init_tests()
+
+        return self._test_manager.get_test_files()
+
+    def get_test_command(self) -> Optional[str]:
+        """
+        Get the command to run tests.
+
+        Returns:
+            Test command string (e.g., "pytest", "npm test")
+        """
+        if not self._test_manager:
+            self.init_tests()
+
+        return self._test_manager.get_test_command()
+
+    @property
+    def has_tests(self) -> bool:
+        """Whether the project has tests."""
+        if not self._test_manager:
+            self.init_tests()
+        return self._test_manager.has_tests
+
+    @property
+    def tests(self) -> Optional[TestManager]:
+        """Access the test manager directly."""
+        return self._test_manager
 
     @property
     def config(self) -> InterpreterConfig:
