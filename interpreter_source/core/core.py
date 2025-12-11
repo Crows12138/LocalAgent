@@ -16,6 +16,7 @@ from ..terminal_interface.terminal_interface import terminal_interface
 from ..terminal_interface.utils.display_markdown_message import display_markdown_message
 from ..terminal_interface.utils.local_storage_path import get_storage_path
 from ..terminal_interface.utils.oi_dir import oi_dir
+from .codebase import CodebaseIndexer
 from .computer.computer import Computer
 from .config import InterpreterConfig
 from .default_system_message import default_system_message
@@ -153,6 +154,9 @@ class OpenInterpreter:
         self.code_output_template = code_output_template
         self.empty_code_output_template = empty_code_output_template
         self.code_output_sender = code_output_sender
+
+        # LocalAgent extension: Codebase indexing
+        self._codebase_indexer: Optional[CodebaseIndexer] = None
 
     def local_setup(self):
         """
@@ -471,6 +475,77 @@ class OpenInterpreter:
     def get_oi_dir(self) -> str:
         """Get the Open Interpreter directory path."""
         return oi_dir
+
+    # =========================================================================
+    # LocalAgent Extension: Codebase Indexing
+    # =========================================================================
+
+    def index_codebase(self, path: str = ".", max_file_size: int = 500_000) -> str:
+        """
+        Index a codebase for intelligent context retrieval.
+
+        This scans the directory, extracts symbols and keywords from code files,
+        and enables relevant file retrieval for queries.
+
+        Args:
+            path: Path to the directory to index (default: current directory)
+            max_file_size: Maximum file size in bytes to index (default: 500KB)
+
+        Returns:
+            Project overview string
+
+        Example:
+            interpreter.index_codebase("./my_project")
+            interpreter.chat("What does the login function do?")
+        """
+        self._codebase_indexer = CodebaseIndexer()
+        self._codebase_indexer.index_directory(path, max_file_size=max_file_size)
+        return self._codebase_indexer.get_project_overview()
+
+    def get_relevant_context(self, query: str, max_files: int = 5) -> str:
+        """
+        Get relevant code context for a query.
+
+        Args:
+            query: The query to search for
+            max_files: Maximum number of files to include
+
+        Returns:
+            Context string with relevant file contents
+        """
+        if not self._codebase_indexer:
+            return "No codebase indexed. Call index_codebase() first."
+        return self._codebase_indexer.get_context_for_query(query, max_files=max_files)
+
+    def search_codebase(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search the indexed codebase.
+
+        Args:
+            query: Search query
+            max_results: Maximum number of results
+
+        Returns:
+            List of matching files with scores
+        """
+        if not self._codebase_indexer:
+            return []
+
+        results = self._codebase_indexer.get_relevant_files(query, max_results=max_results)
+        return [
+            {
+                "path": path,
+                "score": score,
+                "summary": entry.summary,
+                "symbols": entry.symbols[:10],  # First 10 symbols
+            }
+            for path, score, entry in results
+        ]
+
+    @property
+    def codebase(self) -> Optional[CodebaseIndexer]:
+        """Access the codebase indexer directly."""
+        return self._codebase_indexer
 
     @property
     def config(self) -> InterpreterConfig:
