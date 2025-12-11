@@ -85,6 +85,8 @@ class OpenInterpreter:
         multi_line=True,
         contribute_conversation=False,
         plain_text_display=False,
+        # LocalAgent extension: easy local model setup
+        local_model=None,  # e.g., "qwen2.5-coder:14b" or "llama3.1:8b"
     ):
         # State
         self.messages = [] if messages is None else messages
@@ -133,6 +135,15 @@ class OpenInterpreter:
 
         # LLM
         self.llm = Llm(self) if llm is None else llm
+
+        # LocalAgent extension: easy local model configuration
+        # If local_model is specified, auto-configure for Ollama
+        if local_model:
+            self.offline = True
+            self.llm.model = f"ollama/{local_model}" if not local_model.startswith("ollama/") else local_model
+            self.llm.api_base = "http://localhost:11434"
+            self.llm.context_window = 32768
+            self.llm.max_tokens = 4096
 
         # These are LLM related
         self.system_message = system_message
