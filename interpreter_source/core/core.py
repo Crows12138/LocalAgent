@@ -21,6 +21,7 @@ from .computer.computer import Computer
 from .context import ContextManager, ContextBuilder, ConversationCompactor
 from .git import GitManager
 from .testing import TestManager, TestResult
+from .planning import TaskPlanner, TaskPlan
 from .config import InterpreterConfig
 from .prompts import default_system_message
 from .llm.llm import Llm
@@ -172,6 +173,9 @@ class OpenInterpreter:
 
         # LocalAgent extension: Conversation compaction (Claude Code-style /compact)
         self._compactor: Optional[ConversationCompactor] = None
+
+        # LocalAgent extension: Task planning (structured planning mode)
+        self._planner: Optional[TaskPlanner] = None
 
     def local_setup(self):
         """
@@ -1399,3 +1403,83 @@ class OpenInterpreter:
     def compactor(self) -> Optional[ConversationCompactor]:
         """Access the conversation compactor directly."""
         return self._compactor
+
+    # =========================================================================
+    # LocalAgent Extension: Task Planning Mode
+    # =========================================================================
+
+    def enable_planning(self, auto_execute: bool = False) -> "OpenInterpreter":
+        """
+        Enable task planning mode.
+
+        When enabled, the LLM will output structured plans before
+        executing complex tasks. This improves reliability and
+        allows tracking of multi-step tasks.
+
+        Args:
+            auto_execute: Automatically execute steps without confirmation
+
+        Returns:
+            self for chaining
+
+        Example:
+            interpreter.enable_planning()
+            interpreter.chat("Add user authentication to the app")
+            # LLM will first output a plan, then execute step by step
+        """
+        if not self._planner:
+            self._planner = TaskPlanner(self)
+        self._planner.enable(auto_execute=auto_execute)
+        return self
+
+    def disable_planning(self) -> "OpenInterpreter":
+        """Disable task planning mode."""
+        if self._planner:
+            self._planner.disable()
+        return self
+
+    def get_plan_progress(self) -> str:
+        """
+        Get current plan progress as formatted string.
+
+        Returns:
+            Progress string with step status
+        """
+        if not self._planner:
+            return "Planning mode not enabled"
+        return self._planner.get_progress_message()
+
+    def create_plan(self, goal: str, steps: List[Dict[str, Any]]) -> TaskPlan:
+        """
+        Create a task plan programmatically.
+
+        Args:
+            goal: Overall goal description
+            steps: List of step dictionaries with 'description' and optional 'depends_on'
+
+        Returns:
+            Created TaskPlan
+
+        Example:
+            plan = interpreter.create_plan(
+                goal="Add login feature",
+                steps=[
+                    {"description": "Create user model"},
+                    {"description": "Add auth routes", "depends_on": [1]},
+                    {"description": "Add tests", "depends_on": [2]},
+                ]
+            )
+        """
+        if not self._planner:
+            self._planner = TaskPlanner(self)
+        return self._planner.create_plan(goal, steps)
+
+    @property
+    def planner(self) -> Optional[TaskPlanner]:
+        """Access the task planner directly."""
+        return self._planner
+
+    @property
+    def planning_enabled(self) -> bool:
+        """Whether planning mode is enabled."""
+        return self._planner is not None and self._planner.enabled

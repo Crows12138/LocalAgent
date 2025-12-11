@@ -59,6 +59,16 @@ def respond(interpreter):
                     system_message + "\n\n" + interpreter.computer.system_message
                 )
 
+        # Add planning prompt if planning mode is enabled
+        if (
+            hasattr(interpreter, "_planner")
+            and interpreter._planner
+            and interpreter._planner.enabled
+        ):
+            planning_prompt = interpreter._planner.get_planning_prompt()
+            if planning_prompt and planning_prompt not in system_message:
+                system_message = system_message + "\n\n" + planning_prompt
+
         ## Rendering ↓
         rendered_system_message = render_message(interpreter, system_message)
         ## Rendering ↑
