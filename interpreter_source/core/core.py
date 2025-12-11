@@ -18,6 +18,7 @@ from ..terminal_interface.utils.local_storage_path import get_storage_path
 from ..terminal_interface.utils.oi_dir import oi_dir
 from .codebase import CodebaseIndexer
 from .computer.computer import Computer
+from .git import GitManager
 from .config import InterpreterConfig
 from .default_system_message import default_system_message
 from .llm.llm import Llm
@@ -157,6 +158,9 @@ class OpenInterpreter:
 
         # LocalAgent extension: Codebase indexing
         self._codebase_indexer: Optional[CodebaseIndexer] = None
+
+        # LocalAgent extension: Git integration
+        self._git_manager: Optional[GitManager] = None
 
     def local_setup(self):
         """
@@ -546,6 +550,215 @@ class OpenInterpreter:
     def codebase(self) -> Optional[CodebaseIndexer]:
         """Access the codebase indexer directly."""
         return self._codebase_indexer
+
+    # =========================================================================
+    # LocalAgent Extension: Git Integration
+    # =========================================================================
+
+    def init_git(self, path: str = ".") -> str:
+        """
+        Initialize Git integration for a repository.
+
+        Args:
+            path: Path to the Git repository
+
+        Returns:
+            Git status summary
+
+        Example:
+            interpreter.init_git("./my_project")
+            interpreter.git_status()
+        """
+        self._git_manager = GitManager(path)
+        return self._git_manager.get_summary()
+
+    def git_status(self) -> Dict[str, Any]:
+        """
+        Get Git repository status.
+
+        Returns:
+            Status dict with branch, changes, etc.
+        """
+        if not self._git_manager:
+            return {"error": "Git not initialized. Call init_git() first."}
+
+        status = self._git_manager.status()
+        return {
+            "branch": status.branch,
+            "is_clean": status.is_clean,
+            "staged": status.staged,
+            "modified": status.modified,
+            "untracked": status.untracked,
+            "deleted": status.deleted,
+            "ahead": status.ahead,
+            "behind": status.behind,
+        }
+
+    def git_diff(self, staged: bool = False, file: Optional[str] = None) -> str:
+        """
+        Get diff of changes.
+
+        Args:
+            staged: Show staged changes
+            file: Specific file to diff
+
+        Returns:
+            Diff string
+        """
+        if not self._git_manager:
+            return "Git not initialized. Call init_git() first."
+        return self._git_manager.diff(staged=staged, file=file)
+
+    def git_log(self, count: int = 10) -> List[Dict[str, str]]:
+        """
+        Get commit history.
+
+        Args:
+            count: Number of commits
+
+        Returns:
+            List of commit dicts
+        """
+        if not self._git_manager:
+            return []
+
+        commits = self._git_manager.log(count=count)
+        return [
+            {
+                "hash": c.short_hash,
+                "author": c.author,
+                "date": c.date,
+                "message": c.message,
+            }
+            for c in commits
+        ]
+
+    def git_commit(self, message: str, add_all: bool = False) -> Dict[str, Any]:
+        """
+        Create a Git commit.
+
+        Args:
+            message: Commit message
+            add_all: Stage all changes first
+
+        Returns:
+            Commit info dict
+        """
+        if not self._git_manager:
+            return {"error": "Git not initialized. Call init_git() first."}
+
+        try:
+            commit = self._git_manager.commit(message, add_all=add_all)
+            return {
+                "success": True,
+                "hash": commit.short_hash,
+                "message": commit.message,
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def git_add(self, files: Optional[List[str]] = None, all: bool = False) -> bool:
+        """
+        Stage files for commit.
+
+        Args:
+            files: Files to stage
+            all: Stage all changes
+
+        Returns:
+            Success status
+        """
+        if not self._git_manager:
+            return False
+
+        try:
+            self._git_manager.add(files=files, all=all)
+            return True
+        except Exception:
+            return False
+
+    def git_branch(self, name: Optional[str] = None, checkout: bool = True) -> str:
+        """
+        Create or list branches.
+
+        Args:
+            name: Branch name to create (None = list branches)
+            checkout: Switch to new branch
+
+        Returns:
+            Current branch or list of branches
+        """
+        if not self._git_manager:
+            return "Git not initialized"
+
+        if name:
+            self._git_manager.create_branch(name, checkout=checkout)
+            return f"Created and switched to branch: {name}" if checkout else f"Created branch: {name}"
+        else:
+            branches = self._git_manager.branches()
+            current = self._git_manager.current_branch()
+            return f"Current: {current}\nBranches: {', '.join(branches)}"
+
+    def git_checkout(self, branch: str) -> bool:
+        """
+        Switch to a branch.
+
+        Args:
+            branch: Branch name
+
+        Returns:
+            Success status
+        """
+        if not self._git_manager:
+            return False
+
+        try:
+            self._git_manager.checkout(branch)
+            return True
+        except Exception:
+            return False
+
+    def git_push(self, remote: str = "origin", set_upstream: bool = False) -> str:
+        """
+        Push to remote.
+
+        Args:
+            remote: Remote name
+            set_upstream: Set upstream tracking
+
+        Returns:
+            Push output
+        """
+        if not self._git_manager:
+            return "Git not initialized"
+
+        try:
+            return self._git_manager.push(remote=remote, set_upstream=set_upstream)
+        except Exception as e:
+            return f"Push failed: {e}"
+
+    def git_pull(self, remote: str = "origin") -> str:
+        """
+        Pull from remote.
+
+        Args:
+            remote: Remote name
+
+        Returns:
+            Pull output
+        """
+        if not self._git_manager:
+            return "Git not initialized"
+
+        try:
+            return self._git_manager.pull(remote=remote)
+        except Exception as e:
+            return f"Pull failed: {e}"
+
+    @property
+    def git(self) -> Optional[GitManager]:
+        """Access the Git manager directly."""
+        return self._git_manager
 
     @property
     def config(self) -> InterpreterConfig:
