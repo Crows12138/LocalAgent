@@ -157,12 +157,17 @@ class TestFrameworkDetector:
     def _find_test_files(self, patterns: List[str]) -> List[str]:
         """Find test files matching patterns."""
         test_files = []
+        # Directories to skip
+        skip_dirs = {
+            "node_modules", "venv", ".venv", "__pycache__",
+            ".git", "dist", "build", ".pytest_cache", ".mypy_cache",
+            ".ruff_cache", "site-packages", "eggs", ".eggs",
+            # Skip other projects that might be in the directory
+            "OpenHands", "openhands", ".claude",
+        }
         for root, dirs, files in os.walk(self.root_path):
             # Skip common non-test directories
-            dirs[:] = [d for d in dirs if d not in {
-                "node_modules", "venv", ".venv", "__pycache__",
-                ".git", "dist", "build", ".pytest_cache"
-            }]
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
 
             rel_root = os.path.relpath(root, self.root_path)
             for file in files:
