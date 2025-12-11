@@ -67,3 +67,6 @@ htmlcov/
 
 # Embedded repositories
 OpenHands/
+
+# Claude Code config
+.claude/
