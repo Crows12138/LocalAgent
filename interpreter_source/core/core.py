@@ -17,6 +17,7 @@ from ..terminal_interface.utils.display_markdown_message import display_markdown
 from ..terminal_interface.utils.local_storage_path import get_storage_path
 from ..terminal_interface.utils.oi_dir import oi_dir
 from .computer.computer import Computer
+from .config import InterpreterConfig
 from .default_system_message import default_system_message
 from .llm.llm import Llm
 from .respond import respond
@@ -459,3 +460,161 @@ class OpenInterpreter:
     def get_oi_dir(self) -> str:
         """Get the Open Interpreter directory path."""
         return oi_dir
+
+    @property
+    def config(self) -> InterpreterConfig:
+        """
+        Get the current configuration as an InterpreterConfig object.
+
+        Returns:
+            InterpreterConfig with current settings
+        """
+        cfg = InterpreterConfig()
+
+        # Top-level settings
+        cfg.offline = self.offline
+        cfg.verbose = self.verbose
+        cfg.debug = self.debug
+        cfg.os_mode = self.os
+        cfg.disable_telemetry = self.disable_telemetry
+        cfg.in_terminal_interface = self.in_terminal_interface
+
+        # Loop settings
+        cfg.loop.enabled = self.loop
+        cfg.loop.message = self.loop_message
+        cfg.loop.breakers = self.loop_breakers
+
+        # Conversation settings
+        cfg.conversation.history_enabled = self.conversation_history
+        cfg.conversation.filename = self.conversation_filename
+        cfg.conversation.history_path = self.conversation_history_path
+        cfg.conversation.contribute = self.contribute_conversation
+
+        # Display settings
+        cfg.display.max_output = self.max_output
+        cfg.display.shrink_images = self.shrink_images
+        cfg.display.plain_text = self.plain_text_display
+        cfg.display.highlight_active_line = self.highlight_active_line
+        cfg.display.multi_line = self.multi_line
+        cfg.display.speak_messages = self.speak_messages
+
+        # Safety settings
+        cfg.safety.safe_mode = self.safe_mode
+        cfg.safety.auto_run = self.auto_run
+
+        # LLM settings
+        cfg.llm.system_message = self.system_message
+        cfg.llm.custom_instructions = self.custom_instructions
+        cfg.llm.user_message_template = self.user_message_template
+        cfg.llm.always_apply_user_message_template = self.always_apply_user_message_template
+        cfg.llm.code_output_template = self.code_output_template
+        cfg.llm.empty_code_output_template = self.empty_code_output_template
+        cfg.llm.code_output_sender = self.code_output_sender
+
+        # Computer settings
+        cfg.computer.sync_computer = self.sync_computer
+        cfg.computer.import_computer_api = self.computer.import_computer_api
+        cfg.computer.skills_path = getattr(self.computer.skills, 'path', None)
+        cfg.computer.import_skills = self.computer.import_skills
+
+        return cfg
+
+    @classmethod
+    def from_config(cls, config: InterpreterConfig) -> "OpenInterpreter":
+        """
+        Create an OpenInterpreter instance from an InterpreterConfig.
+
+        Args:
+            config: InterpreterConfig object with settings
+
+        Returns:
+            New OpenInterpreter instance
+        """
+        return cls(
+            offline=config.offline,
+            verbose=config.verbose,
+            debug=config.debug,
+            os=config.os_mode,
+            disable_telemetry=config.disable_telemetry,
+            in_terminal_interface=config.in_terminal_interface,
+            loop=config.loop.enabled,
+            loop_message=config.loop.message,
+            loop_breakers=config.loop.breakers,
+            conversation_history=config.conversation.history_enabled,
+            conversation_filename=config.conversation.filename,
+            conversation_history_path=config.conversation.history_path or get_storage_path("conversations"),
+            contribute_conversation=config.conversation.contribute,
+            max_output=config.display.max_output,
+            shrink_images=config.display.shrink_images,
+            plain_text_display=config.display.plain_text,
+            multi_line=config.display.multi_line,
+            speak_messages=config.display.speak_messages,
+            safe_mode=config.safety.safe_mode,
+            auto_run=config.safety.auto_run,
+            system_message=config.llm.system_message,
+            custom_instructions=config.llm.custom_instructions,
+            user_message_template=config.llm.user_message_template,
+            always_apply_user_message_template=config.llm.always_apply_user_message_template,
+            code_output_template=config.llm.code_output_template,
+            empty_code_output_template=config.llm.empty_code_output_template,
+            code_output_sender=config.llm.code_output_sender,
+            sync_computer=config.computer.sync_computer,
+            import_computer_api=config.computer.import_computer_api,
+            skills_path=config.computer.skills_path,
+            import_skills=config.computer.import_skills,
+        )
+
+    def apply_config(self, config: InterpreterConfig) -> None:
+        """
+        Apply an InterpreterConfig to this instance.
+
+        Args:
+            config: InterpreterConfig object with settings to apply
+        """
+        # Top-level settings
+        self.offline = config.offline
+        self.verbose = config.verbose
+        self.debug = config.debug
+        self.os = config.os_mode
+        self.disable_telemetry = config.disable_telemetry
+        self.in_terminal_interface = config.in_terminal_interface
+
+        # Loop settings
+        self.loop = config.loop.enabled
+        self.loop_message = config.loop.message
+        self.loop_breakers = config.loop.breakers
+
+        # Conversation settings
+        self.conversation_history = config.conversation.history_enabled
+        self.conversation_filename = config.conversation.filename
+        if config.conversation.history_path:
+            self.conversation_history_path = config.conversation.history_path
+        self.contribute_conversation = config.conversation.contribute
+
+        # Display settings
+        self.max_output = config.display.max_output
+        self.shrink_images = config.display.shrink_images
+        self.plain_text_display = config.display.plain_text
+        self.highlight_active_line = config.display.highlight_active_line
+        self.multi_line = config.display.multi_line
+        self.speak_messages = config.display.speak_messages
+
+        # Safety settings
+        self.safe_mode = config.safety.safe_mode
+        self.auto_run = config.safety.auto_run
+
+        # LLM settings
+        self.system_message = config.llm.system_message
+        self.custom_instructions = config.llm.custom_instructions
+        self.user_message_template = config.llm.user_message_template
+        self.always_apply_user_message_template = config.llm.always_apply_user_message_template
+        self.code_output_template = config.llm.code_output_template
+        self.empty_code_output_template = config.llm.empty_code_output_template
+        self.code_output_sender = config.llm.code_output_sender
+
+        # Computer settings
+        self.sync_computer = config.computer.sync_computer
+        self.computer.import_computer_api = config.computer.import_computer_api
+        if config.computer.skills_path:
+            self.computer.skills.path = config.computer.skills_path
+        self.computer.import_skills = config.computer.import_skills
