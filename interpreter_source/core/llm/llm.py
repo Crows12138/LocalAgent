@@ -36,11 +36,6 @@ class SuppressDebugFilter(logging.Filter):
         return True  # Allow all other messages
 
 
-# Default model for LocalAgent - prioritize local models
-# Can be overridden via environment variable
-DEFAULT_MODEL = os.getenv("LOCALAGENT_MODEL", "ollama/qwen2.5-coder:14b")
-
-
 class Llm:
     """
     A stateless LMC-style LLM with some helpful properties.
@@ -56,8 +51,8 @@ class Llm:
         # OpenAI-compatible chat completions "endpoint"
         self.completions = fixed_litellm_completions
 
-        # Settings - Default to local model for LocalAgent
-        self.model = DEFAULT_MODEL
+        # Settings
+        self.model = "gpt-4o"
         self.temperature = 0
 
         self.supports_vision = None  # Will try to auto-detect

@@ -45,19 +45,11 @@ user_id = get_or_create_uuid()
 
 
 def send_telemetry(event_name, properties=None):
-    """
-    Send anonymous telemetry. Has a short timeout to avoid blocking in offline mode.
-    """
     if properties is None:
         properties = {}
-
-    try:
-        properties["oi_version"] = pkg_resources.get_distribution(
-            "open-interpreter"
-        ).version
-    except Exception:
-        properties["oi_version"] = "unknown"
-
+    properties["oi_version"] = pkg_resources.get_distribution(
+        "open-interpreter"
+    ).version
     try:
         url = "https://app.posthog.com/capture"
         headers = {"Content-Type": "application/json"}
@@ -67,8 +59,6 @@ def send_telemetry(event_name, properties=None):
             "properties": properties,
             "distinct_id": user_id,
         }
-        # Short timeout to avoid blocking in offline/slow network scenarios
-        requests.post(url, headers=headers, data=json.dumps(data), timeout=2)
-    except Exception:
-        # Silently ignore telemetry failures - don't block the user
+        requests.post(url, headers=headers, data=json.dumps(data))
+    except:
         pass

@@ -146,9 +146,10 @@ class Browser:
         # response = self.computer.ai.chat(ai_query, base64=screenshot)
         # self.computer.interpreter.llm.model = old_model
 
-        # Use current model for browser queries - no forced cloud dependency
-        # In offline mode, this will use the local model
+        old_model = self.computer.interpreter.llm.model
+        self.computer.interpreter.llm.model = "gpt-4o-mini"
         response = self.computer.ai.chat(ai_query)
+        self.computer.interpreter.llm.model = old_model
 
         print(response)
         print(
