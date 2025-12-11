@@ -91,6 +91,23 @@ def respond(interpreter):
             len(interpreter.messages) > 0
         ), "User message was not passed in. You need to pass in at least one message."
 
+        # Auto-compact if context is near limit
+        if interpreter.should_compact():
+            try:
+                logger.info("Auto-compacting conversation (context near limit)")
+                result = interpreter.compact(verbose=False)
+                if result.get("success"):
+                    # Rebuild messages_for_llm after compaction
+                    messages_for_llm = interpreter.messages.copy()
+                    messages_for_llm = [rendered_system_message] + messages_for_llm
+                    yield {
+                        "role": "system",
+                        "type": "message",
+                        "content": f"\n[Auto-compacted {result['messages_compacted']} messages, saved ~{result['tokens_saved']} tokens]\n\n",
+                    }
+            except Exception as e:
+                logger.warning(f"Auto-compact failed: {e}")
+
         if (
             interpreter.messages[-1]["type"] != "code"
         ):  # If it is, we should run the code (we do below)
@@ -403,6 +420,11 @@ def respond(interpreter):
                     "format": "active_line",
                     "content": None,
                 }
+
+                # If loop mode is disabled, stop after code execution
+                # Otherwise the LLM will be called again unnecessarily
+                if not interpreter.loop:
+                    break
 
             except KeyboardInterrupt:
                 break  # It's fine.

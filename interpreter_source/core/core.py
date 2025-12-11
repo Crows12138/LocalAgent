@@ -18,7 +18,7 @@ from ..terminal_interface.utils.local_storage_path import get_storage_path
 from ..terminal_interface.utils.oi_dir import oi_dir
 from .codebase import CodebaseIndexer
 from .computer.computer import Computer
-from .context import ContextManager, ContextBuilder
+from .context import ContextManager, ContextBuilder, ConversationCompactor
 from .git import GitManager
 from .testing import TestManager, TestResult
 from .config import InterpreterConfig
@@ -169,6 +169,9 @@ class OpenInterpreter:
 
         # LocalAgent extension: Test management
         self._test_manager: Optional[TestManager] = None
+
+        # LocalAgent extension: Conversation compaction (Claude Code-style /compact)
+        self._compactor: Optional[ConversationCompactor] = None
 
     def local_setup(self):
         """
@@ -1191,3 +1194,116 @@ class OpenInterpreter:
         if config.computer.skills_path:
             self.computer.skills.path = config.computer.skills_path
         self.computer.import_skills = config.computer.import_skills
+
+    # =========================================================================
+    # LocalAgent Extension: Conversation Compaction (Claude Code-style /compact)
+    # =========================================================================
+
+    def compact(self, verbose: bool = True) -> Dict[str, Any]:
+        """
+        Compact conversation history by summarizing older messages.
+
+        This is similar to Claude Code's /compact command. It uses the LLM
+        to summarize older messages, preserving key information while
+        freeing up context window space.
+
+        Args:
+            verbose: Print status messages
+
+        Returns:
+            Dict with compact results including:
+            - success: Whether compaction succeeded
+            - messages_before: Message count before
+            - messages_after: Message count after
+            - tokens_saved: Estimated tokens saved
+
+        Example:
+            # Manual compact
+            result = interpreter.compact()
+            print(f"Saved {result['tokens_saved']} tokens")
+
+            # Check context usage first
+            stats = interpreter.get_context_stats()
+            if stats['context_usage_percent'] > 80:
+                interpreter.compact()
+        """
+        if not self._compactor:
+            self._compactor = ConversationCompactor(self)
+
+        return self._compactor.compact(verbose=verbose)
+
+    def get_context_stats(self) -> Dict[str, Any]:
+        """
+        Get current context window usage statistics.
+
+        Returns:
+            Dict with:
+            - context_used: Tokens used
+            - context_max: Max context tokens
+            - context_usage_percent: Usage percentage
+            - total_compacted_messages: Messages compacted so far
+            - auto_compact_enabled: Whether auto-compact is on
+
+        Example:
+            stats = interpreter.get_context_stats()
+            print(f"Context: {stats['context_usage_percent']}% used")
+        """
+        if not self._compactor:
+            self._compactor = ConversationCompactor(self)
+
+        return self._compactor.get_stats()
+
+    def should_compact(self) -> bool:
+        """
+        Check if conversation should be compacted.
+
+        Returns:
+            True if context usage exceeds threshold
+
+        Example:
+            if interpreter.should_compact():
+                interpreter.compact()
+        """
+        if not self._compactor:
+            self._compactor = ConversationCompactor(self)
+
+        return self._compactor.should_auto_compact()
+
+    def configure_compact(
+        self,
+        auto_compact_threshold: float = None,
+        keep_recent_messages: int = None,
+        auto_compact_enabled: bool = None,
+    ) -> "OpenInterpreter":
+        """
+        Configure conversation compaction settings.
+
+        Args:
+            auto_compact_threshold: Trigger auto-compact at this usage %% (0.0-1.0)
+            keep_recent_messages: Number of recent messages to keep uncompressed
+            auto_compact_enabled: Enable/disable auto-compact
+
+        Returns:
+            self for chaining
+
+        Example:
+            interpreter.configure_compact(
+                auto_compact_threshold=0.7,  # Compact at 70%% usage
+                keep_recent_messages=6,       # Keep last 6 messages
+                auto_compact_enabled=True
+            )
+        """
+        if not self._compactor:
+            self._compactor = ConversationCompactor(self)
+
+        self._compactor.configure(
+            auto_compact_threshold=auto_compact_threshold,
+            keep_recent_messages=keep_recent_messages,
+            auto_compact_enabled=auto_compact_enabled,
+        )
+        return self
+
+    @property
+    def compactor(self) -> Optional[ConversationCompactor]:
+        """Access the conversation compactor directly."""
+        return self._compactor

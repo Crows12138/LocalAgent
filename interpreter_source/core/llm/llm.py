@@ -146,6 +146,18 @@ class Llm:
 
             if is_known_fc_model:
                 self.supports_functions = True
+                # Register the model with litellm to enable native tool calling
+                # This is required for Ollama models to use proper tool_calls format
+                # See: https://docs.litellm.ai/docs/providers/ollama
+                try:
+                    litellm.register_model({
+                        model: {
+                            "supports_function_calling": True,
+                            "supports_vision": False,
+                        }
+                    })
+                except Exception:
+                    pass  # Ignore registration errors
             else:
                 try:
                     if litellm.supports_function_calling(model):
@@ -303,10 +315,23 @@ Continuing...
 
         ## Start forming the request
 
+        # Determine if streaming should be disabled
+        # Ollama's OpenAI-compatible endpoint doesn't properly support streaming with tool calls
+        # In streaming mode, tool calls are returned as JSON in the content field instead of tool_calls
+        # See: https://github.com/ollama/ollama/issues/5993
+        is_ollama = model.startswith("ollama/") or model.startswith("ollama_chat/")
+        use_streaming = True
+
+        if is_ollama and self.supports_functions:
+            # Disable streaming for Ollama models when using tool calling
+            use_streaming = False
+            if self.interpreter.verbose:
+                print("[LLM] Ollama detected with tool calling - using non-streaming mode")
+
         params = {
             "model": model,
             "messages": messages,
-            "stream": True,
+            "stream": use_streaming,
         }
 
         # Optional inputs
@@ -461,10 +486,17 @@ def fixed_litellm_completions(**params):
     first_error = None
 
     params["num_retries"] = 0
+    is_streaming = params.get("stream", True)
 
     for attempt in range(attempts):
         try:
-            yield from litellm.completion(**params)
+            result = litellm.completion(**params)
+            if is_streaming:
+                # Streaming mode: result is an iterator
+                yield from result
+            else:
+                # Non-streaming mode: result is a single ModelResponse
+                yield result
             return  # If the completion is successful, exit the function
         except KeyboardInterrupt:
             print("Exiting...")

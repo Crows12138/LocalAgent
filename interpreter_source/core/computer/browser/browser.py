@@ -25,42 +25,45 @@ class Browser:
     def driver(self, value):
         self._driver = value
 
-    def search(self, query):
+    def search(self, query, max_results=5):
         """
-        Searches the web for the specified query and returns the results.
+        Searches the web using DuckDuckGo (free, no API key required).
+        Returns formatted search results with title, link, and snippet.
+
+        Requires: pip install ddgs
         """
-        response = requests.get(
-            f'{self.computer.api_base.strip("/")}/browser/search',
-            params={"query": query},
-        )
-        return response.json()["result"]
+        try:
+            from ddgs import DDGS
+
+            results = []
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, max_results=max_results):
+                    results.append({
+                        'title': r.get('title', ''),
+                        'link': r.get('href', ''),
+                        'snippet': r.get('body', '')
+                    })
+
+            if results:
+                output = f"Search results for '{query}':\n\n"
+                for i, r in enumerate(results, 1):
+                    output += f"{i}. {r['title']}\n"
+                    output += f"   URL: {r['link']}\n"
+                    output += f"   {r['snippet']}\n\n"
+                return output
+            else:
+                return f"No results found for '{query}'"
+
+        except ImportError:
+            return "Error: ddgs not installed. Run: pip install ddgs"
+        except Exception as e:
+            return f"Search failed: {str(e)}"
 
     def fast_search(self, query):
         """
-        Searches the web for the specified query and returns the results.
+        Alias for search() - DuckDuckGo search is already fast.
         """
-
-        # Start the request in a separate thread
-        response_thread = threading.Thread(
-            target=lambda: setattr(
-                threading.current_thread(),
-                "response",
-                requests.get(
-                    f'{self.computer.api_base.strip("/")}/browser/search',
-                    params={"query": query},
-                ),
-            )
-        )
-        response_thread.start()
-
-        # Perform the Google search
-        self.search_google(query, delays=False)
-
-        # Wait for the request to complete and get the result
-        response_thread.join()
-        response = response_thread.response
-
-        return response.json()["result"]
+        return self.search(query)
 
     def setup(self, headless):
         try:

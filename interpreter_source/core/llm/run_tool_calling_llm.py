@@ -175,6 +175,37 @@ def run_tool_calling_llm(llm, request_params):
     review_category = None
     buffer = ""
 
+    # Check if we're in streaming or non-streaming mode
+    is_streaming = request_params.get("stream", True)
+
+    if not is_streaming:
+        # Non-streaming mode: Get complete response at once
+        # llm.completions yields a single ModelResponse in non-streaming mode
+        response = next(llm.completions(**request_params))
+
+        if not hasattr(response, "choices") or len(response.choices) == 0:
+            return
+
+        message = response.choices[0].message
+
+        # Handle tool calls in non-streaming mode
+        if hasattr(message, "tool_calls") and message.tool_calls:
+            for tool_call in message.tool_calls:
+                if tool_call.function.name == "execute":
+                    arguments = parse_partial_json(tool_call.function.arguments)
+                    if arguments and "language" in arguments and "code" in arguments:
+                        yield {"type": "code", "format": arguments["language"], "content": arguments["code"]}
+                    else:
+                        # Fallback: yield the raw arguments as python code
+                        yield {"type": "code", "format": "python", "content": tool_call.function.arguments}
+
+        # Handle content (text message) in non-streaming mode
+        if hasattr(message, "content") and message.content:
+            yield {"type": "message", "content": message.content}
+
+        return
+
+    # Streaming mode: Process chunks as they arrive
     for chunk in llm.completions(**request_params):
         if "choices" not in chunk or len(chunk["choices"]) == 0:
             # This happens sometimes

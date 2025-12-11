@@ -55,6 +55,8 @@ def handle_help(self, arguments):
         "%save_message [path]": "Saves messages to a specified JSON path. If no path is provided, it defaults to 'messages.json'.",
         "%load_message [path]": "Loads messages from a specified JSON path. If no path is provided, it defaults to 'messages.json'.",
         "%tokens [prompt]": "EXPERIMENTAL: Calculate the tokens used by the next request based on the current conversation's messages and estimate the cost of that request; optionally provide a prompt to also calculate the tokens used by that prompt and the total amount of tokens that will be sent with the next request",
+        "%compact": "Compact conversation history by summarizing older messages (like Claude Code's /compact)",
+        "%context": "Show context window usage statistics",
         "%help": "Show this help message.",
         "%info": "Show system and interpreter information",
         "%jupyter": "Export the conversation to a Jupyter notebook file",
@@ -310,6 +312,77 @@ def markdown(self, export_path: str):
     export_to_markdown(self.messages, export_path)
 
 
+def handle_compact(self, arguments):
+    """
+    Compact conversation history by summarizing older messages.
+    Similar to Claude Code's /compact command.
+    """
+    print("")
+
+    # Show current stats first
+    stats = self.get_context_stats()
+    self.display_message(
+        f"> **Context Usage:** {stats['context_usage_percent']}% "
+        f"({stats['context_used']}/{stats['context_max']} tokens)"
+    )
+
+    if len(self.messages) <= 4:
+        self.display_message("> Not enough messages to compact (need > 4)")
+        print("")
+        return
+
+    # Perform compaction
+    result = self.compact(verbose=False)
+
+    if result["success"]:
+        self.display_message(
+            f"> **Compacted:** {result['messages_compacted']} messages\n"
+            f"> **Messages:** {result['messages_before']} → {result['messages_after']}\n"
+            f"> **Tokens saved:** ~{result['tokens_saved']}"
+        )
+        if result.get("summary_preview"):
+            self.display_message(f"\n> **Summary preview:** {result['summary_preview']}")
+    else:
+        self.display_message(f"> Compact failed: {result.get('reason', 'Unknown error')}")
+
+    print("")
+
+
+def handle_context(self, arguments):
+    """
+    Show context window usage statistics.
+    """
+    print("")
+
+    stats = self.get_context_stats()
+
+    # Create a visual progress bar
+    usage_percent = stats['context_usage_percent']
+    bar_length = 20
+    filled = int(bar_length * usage_percent / 100)
+    bar = "█" * filled + "░" * (bar_length - filled)
+
+    self.display_message(f"> **Context Window Usage**")
+    self.display_message(f"> [{bar}] {usage_percent}%")
+    self.display_message(f"> Used: {stats['context_used']} / {stats['context_max']} tokens")
+    self.display_message(f"> Messages: {len(self.messages)}")
+
+    if stats['total_compacted_messages'] > 0:
+        self.display_message(f"> Previously compacted: {stats['total_compacted_messages']} messages")
+
+    if stats['auto_compact_enabled']:
+        threshold = int(stats['auto_compact_threshold'] * 100)
+        self.display_message(f"> Auto-compact: enabled at {threshold}%")
+    else:
+        self.display_message(f"> Auto-compact: disabled")
+
+    # Suggest compacting if usage is high
+    if usage_percent > 70:
+        self.display_message(f"\n> **Tip:** Use `%compact` to free up context space")
+
+    print("")
+
+
 def handle_magic_command(self, user_input):
     # Handle shell
     if user_input.startswith("%%"):
@@ -332,6 +405,8 @@ def handle_magic_command(self, user_input):
         "info": handle_info,
         "jupyter": jupyter,
         "markdown": markdown,
+        "compact": handle_compact,
+        "context": handle_context,
     }
 
     user_input = user_input[1:].strip()  # Capture the part after the `%`

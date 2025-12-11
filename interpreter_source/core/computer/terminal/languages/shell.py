@@ -25,6 +25,13 @@ class Shell(SubprocessLanguage):
         return preprocess_shell(code)
 
     def line_postprocessor(self, line):
+        # On Windows, clean up characters that can't be encoded in console's default encoding (GBK)
+        # This prevents UnicodeEncodeError when printing to console
+        if platform.system() == "Windows":
+            # Replace problematic Unicode characters with safe alternatives
+            line = line.replace('\ufffd', '?')  # Unicode replacement character
+            # Encode and decode to filter out any remaining problematic chars
+            line = line.encode('gbk', errors='replace').decode('gbk', errors='replace')
         return line
 
     def detect_active_line(self, line):
