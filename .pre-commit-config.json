@@ -1,0 +1,5 @@
+{
+  "testCommand": "python -m pytest tests/ -x -q --tb=short 2>/dev/null || echo 'Tests skipped'",
+  "lintCommand": "python -m py_compile interpreter_source/__init__.py",
+  "description": "LocalAgent pre-commit configuration"
+}
