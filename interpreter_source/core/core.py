@@ -21,9 +21,9 @@ from .computer.computer import Computer
 from .context import ContextManager, ContextBuilder
 from .git import GitManager
 from .config import InterpreterConfig
-from .default_system_message import default_system_message
+from .prompts import default_system_message
 from .llm.llm import Llm
-from .respond import respond
+from .response import respond
 from .constants import DEFAULT_MAX_OUTPUT_CHARS
 from .utils.telemetry import send_telemetry
 from .utils.truncate_output import truncate_output

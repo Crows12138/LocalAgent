@@ -1,9 +1,24 @@
+"""
+Message rendering utilities.
+
+Handles dynamic message rendering with code execution.
+"""
+
 import re
 
 
 def render_message(interpreter, message):
     """
     Renders a dynamic message into a string.
+
+    Executes code within {{ }} blocks and replaces them with output.
+
+    Args:
+        interpreter: OpenInterpreter instance
+        message: Message string with optional {{ code }} blocks
+
+    Returns:
+        Rendered message string
     """
 
     previous_save_skills_setting = interpreter.computer.save_skills

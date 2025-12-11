@@ -1,23 +1,38 @@
+"""
+Main response loop for LocalAgent.
+
+Handles the conversation loop, LLM interaction, and code execution.
+"""
+
 import json
 import os
 import re
-import time
 import traceback
 
 os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 import litellm
-import openai
 
-from .logger import get_logger
-from .render_message import render_message
+from ..utils.logging import get_logger
+from .render import render_message
 
 logger = get_logger(__name__)
 
 
 def respond(interpreter):
     """
-    Yields chunks.
-    Responds until it decides not to run any more code or say anything else.
+    Main response generator.
+
+    Yields chunks as it:
+    1. Renders system message
+    2. Runs the LLM
+    3. Executes any code blocks
+    4. Handles the conversation loop
+
+    Args:
+        interpreter: OpenInterpreter instance
+
+    Yields:
+        Message chunks with role, type, and content
     """
 
     last_unsupported_code = ""
@@ -43,13 +58,6 @@ def respond(interpreter):
                 system_message = (
                     system_message + "\n\n" + interpreter.computer.system_message
                 )
-
-        # Storing the messages so they're accessible in the interpreter's computer
-        # no... this is a huge time sink.....
-        # if interpreter.sync_computer:
-        #     output = interpreter.computer.run(
-        #         "python", f"messages={interpreter.messages}"
-        #     )
 
         ## Rendering ↓
         rendered_system_message = render_message(interpreter, system_message)
@@ -102,9 +110,6 @@ def respond(interpreter):
                 )
                 break
 
-                # Provide extra information on how to change API keys, if we encounter that error
-                # (Many people writing GitHub issues were struggling with this)
-
             except Exception as e:
                 error_message = str(e).lower()
                 if (
@@ -121,7 +126,7 @@ def respond(interpreter):
                     and "exceeded" in str(e).lower()
                     or "insufficient_quota" in str(e).lower()
                 ):
-                    display_markdown_message(
+                    print(
                         f""" > You ran out of current quota for OpenAI's API, please check your plan and billing details. You can either wait for the quota to reset or upgrade your plan.
 
                         To check your current usage and billing details, visit the [OpenAI billing page](https://platform.openai.com/settings/organization/billing/overview).
@@ -391,7 +396,7 @@ def respond(interpreter):
                     print("Failed to sync your Computer with iComputer. Continuing.")
 
                 # yield final "active_line" message, as if to say, no more code is running. unlightlight active lines
-                # (is this a good idea? is this our responsibility? i think so — we're saying what line of code is running! ...?)
+                # (is this a good idea? is this our responsibility? i think so — we're saying what line of code is running! ...?)
                 yield {
                     "role": "computer",
                     "type": "console",

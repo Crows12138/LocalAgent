@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from .constants import DEFAULT_MAX_OUTPUT_CHARS
-from .default_system_message import default_system_message
+from .prompts import default_system_message
 
 
 @dataclass
