@@ -126,14 +126,35 @@ class Llm:
 
         # Detect function support
         if self.supports_functions == None:
-            try:
-                if litellm.supports_function_calling(model):
-                    self.supports_functions = True
-                else:
+            # Known models that support function calling but may not be recognized by litellm
+            # Qwen 2.5 series supports native function/tool calling
+            KNOWN_FUNCTION_CALLING_MODELS = [
+                "qwen2.5-coder",
+                "qwen2.5",
+                "qwen2",
+                "llama3.1",
+                "llama3.2",
+                "mistral-nemo",
+                "codestral",
+            ]
+
+            # Check if model matches any known function-calling model
+            model_lower = model.lower()
+            is_known_fc_model = any(
+                known in model_lower for known in KNOWN_FUNCTION_CALLING_MODELS
+            )
+
+            if is_known_fc_model:
+                self.supports_functions = True
+            else:
+                try:
+                    if litellm.supports_function_calling(model):
+                        self.supports_functions = True
+                    else:
+                        self.supports_functions = False
+                except Exception:
+                    # Model not recognized by litellm, assume no function calling support
                     self.supports_functions = False
-            except Exception:
-                # Model not recognized by litellm, assume no function calling support
-                self.supports_functions = False
 
         # Detect vision support
         if self.supports_vision == None:

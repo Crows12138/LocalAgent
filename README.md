@@ -1,14 +1,16 @@
 # LocalAgent
 
-A fork of [Open Interpreter](https://github.com/OpenInterpreter/open-interpreter) optimized for local language models, particularly Qwen 2.5-Coder models via Ollama.
+A fork of [Open Interpreter](https://github.com/OpenInterpreter/open-interpreter) optimized for local language models, with specific support for **Qwen 2.5-Coder** models via Ollama.
 
 ## Features
 
+- **Qwen 2.5-Coder Optimization**: Dedicated profile with bilingual system prompts (English/Chinese)
+- **Smart Function Calling**: Automatic detection of models that support native tool calling
 - **Local Model Support**: Optimized for running with local LLMs through Ollama
 - **Multi-language Code Execution**: Python, JavaScript, Shell, PowerShell, and more
 - **Computer Control**: File operations, display, keyboard, mouse automation
 - **Conversation History**: Automatic saving and loading of conversations
-- **Configurable Safety**: Multiple safety modes for code execution
+- **Improved Code Parsing**: Better markdown code block parsing with multi-block support
 
 ## Installation
 
@@ -22,18 +24,31 @@ pip install -r requirements.txt
 
 # Install Ollama (for local models)
 # Visit https://ollama.com for installation instructions
+
+# Pull Qwen 2.5-Coder model
+ollama pull qwen2.5-coder:14b
 ```
 
 ## Quick Start
 
-### With Ollama (Recommended)
+### Using Qwen 2.5-Coder (Recommended)
+
+```bash
+# Start with the optimized Qwen profile
+interpreter --profile qwen25-coder.py
+```
+
+Or programmatically:
 
 ```python
 from interpreter_source import interpreter
 
-# Configure for local Ollama model
+# Configure for Qwen 2.5-Coder
 interpreter.llm.model = "ollama/qwen2.5-coder:14b"
 interpreter.llm.api_base = "http://localhost:11434"
+interpreter.llm.context_window = 32768
+interpreter.llm.max_tokens = 4096
+interpreter.llm.supports_functions = True  # Qwen 2.5 supports tool calling
 interpreter.auto_run = True
 interpreter.offline = True
 
@@ -72,6 +87,8 @@ interpreter.llm.model = "ollama/qwen2.5-coder:14b"
 interpreter.llm.api_base = "http://localhost:11434"
 interpreter.llm.context_window = 32768
 interpreter.llm.max_tokens = 4096
+interpreter.llm.supports_functions = True  # Enable for Qwen 2.5
+interpreter.llm.temperature = 0.1  # Lower for deterministic code
 ```
 
 ### Environment Variables
@@ -79,6 +96,24 @@ interpreter.llm.max_tokens = 4096
 | Variable | Description |
 |----------|-------------|
 | `INTERPRETER_LOG_LEVEL` | Set logging level (DEBUG, INFO, WARNING, ERROR) |
+
+## Supported Models
+
+### Qwen 2.5-Coder (Optimized)
+
+| Model | Size | Context | Best For |
+|-------|------|---------|----------|
+| `qwen2.5-coder:7b` | ~4GB | 32K | Quick tasks, limited RAM |
+| `qwen2.5-coder:14b` | ~8GB | 32K | **Recommended** - best balance |
+| `qwen2.5-coder:32b` | ~18GB | 32K | Complex tasks, high accuracy |
+
+### Other Supported Models
+
+- Llama 3.1/3.2
+- Codestral
+- Mistral-Nemo
+- Gemma 2
+- Any Ollama-compatible model
 
 ## Project Structure
 
@@ -89,11 +124,17 @@ LocalAgent/
 │   │   ├── core.py           # Main OpenInterpreter class
 │   │   ├── respond.py        # Response handling
 │   │   ├── llm/              # LLM integration
+│   │   │   ├── llm.py        # LLM class with model detection
+│   │   │   ├── run_text_llm.py      # Markdown parsing (improved)
+│   │   │   └── run_tool_calling_llm.py  # Native tool calling
 │   │   ├── computer/         # Computer control modules
 │   │   ├── config.py         # Configuration dataclasses
+│   │   ├── config_validator.py  # Configuration validation
 │   │   ├── constants.py      # Centralized constants
 │   │   └── logger.py         # Logging system
-│   └── terminal_interface/   # CLI interface
+│   └── terminal_interface/
+│       └── profiles/defaults/
+│           └── qwen25-coder.py  # Qwen-optimized profile
 ├── requirements.txt
 └── README.md
 ```
@@ -114,6 +155,31 @@ The project includes:
 - Unified logging system
 - Configuration validation
 
+## Differences from Open Interpreter
+
+1. **Qwen 2.5-Coder Support**:
+   - Dedicated profile with optimized settings
+   - Bilingual system prompts (English/Chinese)
+   - Automatic function calling detection
+
+2. **Improved Model Detection**:
+   - Known models list for function calling support
+   - Better handling of Ollama models
+
+3. **Enhanced Code Parsing**:
+   - Multi-block support in `run_text_llm`
+   - More robust markdown parsing
+
+4. **Code Quality Improvements**:
+   - Fixed logic errors
+   - Improved exception handling
+   - Added type annotations
+   - Centralized constants
+
+5. **Configuration System**:
+   - New dataclass-based configuration
+   - Configuration validation
+
 ## Supported Languages
 
 - Python
@@ -125,16 +191,6 @@ The project includes:
 - R
 - Ruby
 - AppleScript (macOS)
-
-## Differences from Open Interpreter
-
-1. **Local Model Focus**: Optimized configuration for Ollama and local models
-2. **Code Quality Improvements**:
-   - Fixed logic errors
-   - Improved exception handling
-   - Added type annotations
-   - Centralized constants
-3. **Configuration System**: New dataclass-based configuration
 
 ## License
 
@@ -148,4 +204,4 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 
 - [Open Interpreter](https://github.com/OpenInterpreter/open-interpreter) - The original project
 - [Ollama](https://ollama.com) - Local model serving
-- [Qwen](https://github.com/QwenLM/Qwen) - Language models
+- [Qwen](https://github.com/QwenLM/Qwen) - Qwen 2.5-Coder language models
