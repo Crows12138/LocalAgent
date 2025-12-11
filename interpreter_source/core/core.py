@@ -134,6 +134,17 @@ class OpenInterpreter:
         # LLM
         self.llm = Llm(self) if llm is None else llm
 
+        # Auto-configure for offline/local mode
+        if self.offline:
+            # Ensure local model settings are applied
+            if self.llm.api_base is None:
+                self.llm.api_base = "http://localhost:11434"
+            # Set reasonable defaults for local models if not already set
+            if self.llm.context_window is None:
+                self.llm.context_window = 32768
+            if self.llm.max_tokens is None:
+                self.llm.max_tokens = 4096
+
         # These are LLM related
         self.system_message = system_message
         self.custom_instructions = custom_instructions
