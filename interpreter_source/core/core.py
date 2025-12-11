@@ -818,6 +818,98 @@ class OpenInterpreter:
             self._context_manager.disable()
         return self
 
+    def smart_init(
+        self,
+        project_path: Optional[str] = None,
+        index_codebase: bool = True,
+        enable_context: bool = True,
+        enable_git: bool = True,
+        enable_tests: bool = False,
+        verbose: bool = True,
+    ) -> "OpenInterpreter":
+        """
+        One-liner initialization for intelligent features.
+
+        This is the recommended way to set up LocalAgent for a project.
+        It automatically indexes the codebase, enables context injection,
+        and optionally sets up git and test management.
+
+        Args:
+            project_path: Path to project (defaults to current directory)
+            index_codebase: Index the codebase for smart context retrieval
+            enable_context: Enable auto-context injection into conversations
+            enable_git: Initialize git integration
+            enable_tests: Initialize test framework detection
+
+        Returns:
+            self for chaining
+
+        Example:
+            # Quick setup for current project
+            interpreter.smart_init()
+
+            # Full setup for a specific project
+            interpreter.smart_init(
+                project_path="./my_project",
+                enable_tests=True
+            )
+
+            # Now context is auto-injected
+            interpreter.chat("fix the bug in auth.py")
+        """
+        import os
+        path = project_path or os.getcwd()
+
+        if verbose:
+            print(f"Initializing LocalAgent for: {path}")
+
+        # Index codebase
+        if index_codebase:
+            if verbose:
+                print("  Indexing codebase...")
+            self.index_codebase(path)
+            if verbose:
+                stats = self._codebase_indexer.file_tree.get_summary() if self._codebase_indexer and self._codebase_indexer.file_tree else {}
+                print(f"    Found {stats.get('code_files', 0)} code files")
+
+        # Enable context
+        if enable_context:
+            if verbose:
+                print("  Enabling auto-context injection...")
+            self.enable_context(
+                auto_files=True,
+                auto_codebase=index_codebase,  # Only if we indexed
+                auto_git=enable_git,
+            )
+
+        # Init git
+        if enable_git:
+            if verbose:
+                print("  Initializing git integration...")
+            try:
+                self.init_git(path)
+                if self._git_manager and self._git_manager.branch:
+                    if verbose:
+                        print(f"    Branch: {self._git_manager.branch}")
+            except Exception:
+                if verbose:
+                    print("    (not a git repository)")
+
+        # Init tests
+        if enable_tests:
+            if verbose:
+                print("  Detecting test frameworks...")
+            self.init_tests(path)
+            if self._test_manager and self._test_manager.frameworks:
+                if verbose:
+                    frameworks = ", ".join(fw.framework.name for fw in self._test_manager.frameworks)
+                    print(f"    Found: {frameworks}")
+
+        if verbose:
+            print("Ready!")
+
+        return self
+
     def build_context(self) -> ContextBuilder:
         """
         Get a context builder for manual context construction.

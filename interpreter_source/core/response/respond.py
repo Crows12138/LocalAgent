@@ -71,6 +71,23 @@ def respond(interpreter):
 
         # Create the version of messages that we'll send to the LLM
         messages_for_llm = interpreter.messages.copy()
+
+        # Auto-inject context into the last user message (if context manager is enabled)
+        if (
+            messages_for_llm
+            and messages_for_llm[-1].get("role") == "user"
+            and messages_for_llm[-1].get("type") == "message"
+            and hasattr(interpreter, "_context_manager")
+            and interpreter._context_manager
+            and interpreter._context_manager.config.enabled
+        ):
+            original_content = messages_for_llm[-1].get("content", "")
+            injected_content = interpreter._context_manager.inject_context(original_content)
+            if injected_content != original_content:
+                messages_for_llm[-1] = messages_for_llm[-1].copy()
+                messages_for_llm[-1]["content"] = injected_content
+                logger.info("Auto-injected context into user message")
+
         messages_for_llm = [rendered_system_message] + messages_for_llm
 
         if insert_loop_message:
