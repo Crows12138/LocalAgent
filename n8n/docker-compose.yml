@@ -13,7 +13,10 @@ services:
     ports:
       - "5678:5678"
     volumes:
-      - ./data:/home/node/.n8n
+      # 数据存储在用户目录，而不是项目中
+      # Windows: C:\Users\<username>\.n8n
+      # Linux/Mac: ~/.n8n
+      - ~/.n8n:/home/node/.n8n
     environment:
       - GENERIC_TIMEZONE=Asia/Shanghai
       - TZ=Asia/Shanghai
