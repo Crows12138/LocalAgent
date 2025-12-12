@@ -23,9 +23,10 @@ import json
 import os
 import sys
 import subprocess
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pathlib import Path
+from threading import Lock
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -47,6 +48,10 @@ interpreter.llm.max_tokens = 4096
 interpreter.llm.supports_functions = True
 interpreter.auto_run = True  # 自动执行代码，无需确认
 interpreter.offline = True
+
+# 任务存储 (用于后台任务追踪)
+task_storage: Dict[str, Dict[str, Any]] = {}
+task_lock = Lock()
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -243,7 +248,7 @@ async def chat_stream(request: ChatRequest):
                     content = chunk.get("content", "")
                     if content:
                         yield f"data: {json.dumps({'content': content}, ensure_ascii=False)}\n\n"
-                elif chunk.get("type") == "console":
+                elif chunk.get("type") == "console" and chunk.get("format") == "output":
                     output = chunk.get("content", "")
                     if output:
                         yield f"data: {json.dumps({'output': output}, ensure_ascii=False)}\n\n"
@@ -467,28 +472,75 @@ async def get_history():
 
 # ============ 高级功能 ============
 
+def run_task_in_background(task_id: str, message: str, auto_run: bool):
+    """后台执行任务的函数"""
+    with task_lock:
+        task_storage[task_id]["status"] = "running"
+        task_storage[task_id]["started_at"] = datetime.now().isoformat()
+
+    try:
+        response = collect_response(message, auto_run)
+        with task_lock:
+            task_storage[task_id]["status"] = "completed"
+            task_storage[task_id]["response"] = response
+            task_storage[task_id]["completed_at"] = datetime.now().isoformat()
+    except Exception as e:
+        with task_lock:
+            task_storage[task_id]["status"] = "failed"
+            task_storage[task_id]["error"] = str(e)
+            task_storage[task_id]["completed_at"] = datetime.now().isoformat()
+
+
 @app.post("/task")
 async def execute_task(request: ChatRequest, background_tasks: BackgroundTasks):
     """
     执行复杂任务 (后台运行)
 
-    适合耗时较长的任务，立即返回任务 ID
+    立即返回任务 ID，任务在后台执行
+    使用 GET /task/{task_id} 查询任务状态和结果
     """
     import uuid
     task_id = str(uuid.uuid4())[:8]
 
-    # TODO: 实现任务队列和状态追踪
-    # 目前直接执行
-    try:
-        response = collect_response(request.message, request.auto_run)
-        return {
-            "success": True,
-            "task_id": task_id,
-            "response": response,
-            "timestamp": datetime.now().isoformat()
+    # 初始化任务状态
+    with task_lock:
+        task_storage[task_id] = {
+            "status": "pending",
+            "message": request.message,
+            "created_at": datetime.now().isoformat(),
+            "response": None,
+            "error": None
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    # 添加到后台任务队列
+    background_tasks.add_task(run_task_in_background, task_id, request.message, request.auto_run)
+
+    return {
+        "success": True,
+        "task_id": task_id,
+        "status": "pending",
+        "message": "任务已提交，使用 GET /task/{task_id} 查询结果",
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/task/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    查询后台任务状态
+
+    返回任务状态: pending, running, completed, failed
+    """
+    with task_lock:
+        if task_id not in task_storage:
+            raise HTTPException(status_code=404, detail=f"任务不存在: {task_id}")
+
+        task = task_storage[task_id].copy()
+
+    return {
+        "task_id": task_id,
+        **task
+    }
 
 
 # ============ 启动服务 ============
