@@ -9,5 +9,7 @@ This module provides functionality to:
 
 from .indexer import CodebaseIndexer
 from .file_tree import FileTree
+from .semantic_indexer import SemanticIndexer
+from .hybrid_indexer import HybridIndexer
 
-__all__ = ["CodebaseIndexer", "FileTree"]
+__all__ = ["CodebaseIndexer", "FileTree", "SemanticIndexer", "HybridIndexer"]

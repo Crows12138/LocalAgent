@@ -16,7 +16,7 @@ from ..terminal_interface.terminal_interface import terminal_interface
 from ..terminal_interface.utils.display_markdown_message import display_markdown_message
 from ..terminal_interface.utils.local_storage_path import get_storage_path
 from ..terminal_interface.utils.oi_dir import oi_dir
-from .codebase import CodebaseIndexer
+from .codebase import CodebaseIndexer, HybridIndexer
 from .computer.computer import Computer
 from .context import ContextManager, ContextBuilder, ConversationCompactor
 from .git import GitManager
@@ -92,6 +92,11 @@ class OpenInterpreter:
         plain_text_display=False,
         # LocalAgent extension: easy local model setup
         local_model=None,  # e.g., "qwen2.5-coder:14b" or "llama3.1:8b"
+        # Voice features (cross-platform)
+        voice=False,  # Enable both voice input and output
+        voice_input=False,  # Enable voice input only (STT)
+        voice_output=False,  # Enable voice output only (TTS)
+        voice_language="auto",  # Voice language: zh, en, ja, auto
     ):
         # State
         self.messages = [] if messages is None else messages
@@ -126,6 +131,12 @@ class OpenInterpreter:
         # OS control mode related attributes
         self.os = os
         self.speak_messages = speak_messages
+
+        # Voice features (cross-platform)
+        self.voice = voice
+        self.voice_input = voice_input
+        self.voice_output = voice_output
+        self.voice_language = voice_language
 
         # Computer
         self.computer = Computer(self) if computer is None else computer
@@ -499,16 +510,21 @@ class OpenInterpreter:
     # LocalAgent Extension: Codebase Indexing
     # =========================================================================
 
-    def index_codebase(self, path: str = ".", max_file_size: int = 500_000) -> str:
+    def index_codebase(
+        self,
+        path: str = ".",
+        max_file_size: int = 500_000,
+        mode: str = "hybrid",
+        semantic_weight: float = 0.6,
+    ) -> str:
         """
         Index a codebase for intelligent context retrieval.
-
-        This scans the directory, extracts symbols and keywords from code files,
-        and enables relevant file retrieval for queries.
 
         Args:
             path: Path to the directory to index (default: current directory)
             max_file_size: Maximum file size in bytes to index (default: 500KB)
+            mode: Search mode - "keyword", "semantic", or "hybrid" (default)
+            semantic_weight: Weight for semantic search in hybrid mode (0-1)
 
         Returns:
             Project overview string
@@ -517,7 +533,10 @@ class OpenInterpreter:
             interpreter.index_codebase("./my_project")
             interpreter.chat("What does the login function do?")
         """
-        self._codebase_indexer = CodebaseIndexer()
+        if mode == "hybrid":
+            self._codebase_indexer = HybridIndexer(semantic_weight=semantic_weight)
+        else:
+            self._codebase_indexer = CodebaseIndexer()
         self._codebase_indexer.index_directory(path, max_file_size=max_file_size)
         return self._codebase_indexer.get_project_overview()
 

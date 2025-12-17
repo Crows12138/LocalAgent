@@ -28,6 +28,10 @@ Pillow>=9.0.0
 # Version management
 packaging>=21.0
 
+# Semantic search
+sentence-transformers>=2.2.0
+numpy>=1.21.0
+
 # Optional dependencies for specific features
 # selenium>=4.0.0        # For browser automation (the01 profile)
 # e2b>=0.0.1             # For E2B integration
