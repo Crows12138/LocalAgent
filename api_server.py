@@ -53,6 +53,11 @@ interpreter.offline = True
 task_storage: Dict[str, Dict[str, Any]] = {}
 task_lock = Lock()
 
+# 统一对话历史（Chat 和 Agent 共享）
+# 格式: [{"role": "user"/"assistant", "content": "..."}]
+conversation_history: List[Dict[str, str]] = []
+HISTORY_LIMIT = 10  # 保留最近 10 轮对话（20条消息）
+
 # 创建 FastAPI 应用
 app = FastAPI(
     title="LocalAgent API",
@@ -162,32 +167,25 @@ def needs_agent(message: str) -> tuple[bool, str]:
     return False, message
 
 
-def chat_with_ollama(message: str) -> str:
-    """直接用 Ollama 聊天（不经过 interpreter）"""
+def chat_with_ollama(user_msg: str, system_prompt: str = None) -> str:
+    """直接用 Ollama 聊天（带对话历史）"""
+    global conversation_history
     import requests
 
-    # 提取 system prompt 和 user message
-    system_prompt = "你是可爱的桌面宠物Io。回复简短（50字以内），轻松可爱。"
-    user_msg = message
+    if not system_prompt:
+        system_prompt = "你是可爱的桌面宠物Io。回复简短（50字以内），轻松可爱。"
 
-    if "用户:" in message:
-        parts = message.split("用户:")
-        system_prompt = parts[0].strip()
-        user_msg = parts[1].strip()
-    elif "用户：" in message:
-        parts = message.split("用户：")
-        system_prompt = parts[0].strip()
-        user_msg = parts[1].strip()
+    # 构建消息列表：system + 历史 + 当前用户消息
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(conversation_history)  # 加入对话历史
+    messages.append({"role": "user", "content": user_msg})
 
     try:
         response = requests.post(
             "http://localhost:11434/api/chat",
             json={
-                "model": "qwen2.5:1.5b",  # 用小模型聊天，更快
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_msg}
-                ],
+                "model": "qwen2.5:1.5b",
+                "messages": messages,
                 "stream": False,
                 "options": {"temperature": 0.7, "num_predict": 100}
             },
@@ -195,7 +193,17 @@ def chat_with_ollama(message: str) -> str:
         )
         if response.status_code == 200:
             result = response.json()
-            return result.get("message", {}).get("content", "")
+            assistant_reply = result.get("message", {}).get("content", "")
+
+            # 保存到历史
+            conversation_history.append({"role": "user", "content": user_msg})
+            conversation_history.append({"role": "assistant", "content": assistant_reply})
+
+            # 限制历史长度
+            if len(conversation_history) > HISTORY_LIMIT * 2:
+                conversation_history = conversation_history[-HISTORY_LIMIT * 2:]
+
+            return assistant_reply
     except Exception as e:
         return f"聊天出错: {str(e)[:50]}"
 
@@ -310,7 +318,7 @@ async def get_models():
 @app.post("/chat")
 async def chat(request: ChatRequest):
     """
-    自然语言对话 - 核心端点（带智能路由）
+    自然语言对话 - 核心端点（带智能路由 + 统一记忆）
 
     路由规则：
     - @ 开头或包含关键词 → Agent 模式（可执行代码）
@@ -318,13 +326,55 @@ async def chat(request: ChatRequest):
 
     当 auto_run=False 时，返回 pending_code 供用户确认后执行
     """
+    global conversation_history
+
+    # 提取 system prompt 和 user message
+    system_prompt = "你是可爱的桌面宠物Io。回复简短（50字以内），轻松可爱。"
+    user_msg = request.message
+
+    if "用户:" in request.message:
+        parts = request.message.split("用户:")
+        system_prompt = parts[0].strip()
+        user_msg = parts[1].strip()
+    elif "用户：" in request.message:
+        parts = request.message.split("用户：")
+        system_prompt = parts[0].strip()
+        user_msg = parts[1].strip()
+
     try:
         # 智能路由：判断是否需要 Agent
-        use_agent, clean_message = needs_agent(request.message)
+        use_agent, _ = needs_agent(request.message)
 
         if use_agent:
             # Agent 模式：使用 interpreter
-            result = collect_response(clean_message, request.auto_run)
+            result = collect_response(request.message, request.auto_run)
+
+            # 记录到统一历史（保留有意义的信息）
+            conversation_history.append({"role": "user", "content": user_msg})
+
+            # 构建 Agent 回复摘要
+            text_part = result["text"].split("### 执行结果:")[0].strip()
+            code_output = result.get("code_output", "")
+
+            if text_part:
+                # 有文本回复，使用它
+                agent_summary = text_part
+            elif code_output:
+                # 只有执行结果，取最后150字符作为摘要（关键信息通常在末尾）
+                if len(code_output) > 150:
+                    output_preview = "..." + code_output[-150:].strip()
+                else:
+                    output_preview = code_output.strip()
+                agent_summary = f"执行完成。结果: {output_preview}"
+            else:
+                agent_summary = "好的，已完成。"
+
+            conversation_history.append({"role": "assistant", "content": agent_summary})
+
+            # 限制历史长度
+            if len(conversation_history) > HISTORY_LIMIT * 2:
+                conversation_history = conversation_history[-HISTORY_LIMIT * 2:]
+
             return {
                 "success": True,
                 "mode": "agent",
@@ -333,15 +383,15 @@ async def chat(request: ChatRequest):
                 "timestamp": datetime.now().isoformat()
             }
         else:
-            # 聊天模式：直接用 Ollama
-            response_text = chat_with_ollama(request.message)
+            # 聊天模式：直接用 Ollama（内部会记录历史）
+            response_text = chat_with_ollama(user_msg, system_prompt)
             return {
                 "success": True,
                 "mode": "chat",
                 "response": response_text,
                 "pending_code": None,
                 "timestamp": datetime.now().isoformat()
-        }
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -560,8 +610,10 @@ async def run_shell(request: ShellRequest):
 
 @app.post("/reset")
 async def reset_conversation():
-    """重置对话历史"""
+    """重置对话历史（统一清空）"""
+    global conversation_history
     interpreter.messages = []
+    conversation_history = []
     return {
         "success": True,
         "message": "对话历史已清空",
@@ -571,10 +623,11 @@ async def reset_conversation():
 
 @app.get("/history")
 async def get_history():
-    """获取对话历史"""
+    """获取统一对话历史"""
     return {
-        "messages": interpreter.messages,
-        "count": len(interpreter.messages),
+        "messages": conversation_history,
+        "count": len(conversation_history),
+        "interpreter_messages": len(interpreter.messages),  # Agent 内部消息数
         "timestamp": datetime.now().isoformat()
     }
 
