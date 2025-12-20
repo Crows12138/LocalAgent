@@ -124,11 +124,98 @@ class ShellRequest(BaseModel):
 
 # ============ 工具函数 ============
 
-def collect_response(message: str, auto_run: bool = True) -> str:
-    """收集 interpreter 的完整响应"""
+def needs_agent(message: str) -> tuple[bool, str]:
+    """判断是否需要 Agent（有工具能力）
+
+    返回: (需要Agent, 清理后的消息)
+
+    规则：
+    - @ 开头强制 Agent
+    - 包含特定关键词 → Agent
+    - 否则 → 纯聊天（直接用 Ollama）
+    """
+    # 提取用户消息（去掉 system prompt）
+    user_msg = message
+    if "用户:" in message:
+        user_msg = message.split("用户:")[-1].strip()
+    elif "用户：" in message:
+        user_msg = message.split("用户：")[-1].strip()
+
+    # 显式触发
+    if user_msg.startswith('@'):
+        return True, message.replace('@', '', 1)
+
+    # 关键词触发
+    agent_keywords = [
+        '搜索', '搜一下', '查一下', '查询', '查找',
+        '打开', '运行', '执行', '创建', '删除',
+        '文件', '目录', '文件夹',
+        '下载', '安装',
+        '新闻', '股票', '汇率',
+        '计算', '算一下',
+    ]
+
+    for kw in agent_keywords:
+        if kw in user_msg:
+            return True, message
+
+    return False, message
+
+
+def chat_with_ollama(message: str) -> str:
+    """直接用 Ollama 聊天（不经过 interpreter）"""
+    import requests
+
+    # 提取 system prompt 和 user message
+    system_prompt = "你是可爱的桌面宠物Io。回复简短（50字以内），轻松可爱。"
+    user_msg = message
+
+    if "用户:" in message:
+        parts = message.split("用户:")
+        system_prompt = parts[0].strip()
+        user_msg = parts[1].strip()
+    elif "用户：" in message:
+        parts = message.split("用户：")
+        system_prompt = parts[0].strip()
+        user_msg = parts[1].strip()
+
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/chat",
+            json={
+                "model": "qwen2.5:1.5b",  # 用小模型聊天，更快
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_msg}
+                ],
+                "stream": False,
+                "options": {"temperature": 0.7, "num_predict": 100}
+            },
+            timeout=30
+        )
+        if response.status_code == 200:
+            result = response.json()
+            return result.get("message", {}).get("content", "")
+    except Exception as e:
+        return f"聊天出错: {str(e)[:50]}"
+
+    return "嗯...我不知道该说什么"
+
+
+def collect_response(message: str, auto_run: bool = True) -> dict:
+    """收集 interpreter 的完整响应
+
+    返回:
+        {
+            "text": "响应文本",
+            "pending_code": {"language": "python", "code": "..."} 或 None,
+            "code_output": "执行结果" 或 None
+        }
+    """
     interpreter.auto_run = auto_run
     full_response = ""
     code_outputs = []
+    pending_code = None  # 待确认的代码
 
     for chunk in interpreter.chat(message=message, stream=True, display=False):
         chunk_type = chunk.get("type", "")
@@ -138,17 +225,27 @@ def collect_response(message: str, auto_run: bool = True) -> str:
             if content:
                 full_response += content
 
-        # 收集代码执行结果
+        # 捕获代码块 (当 auto_run=False 时，代码不会执行)
+        if chunk_type == "code":
+            code_content = chunk.get("content", "")
+            code_lang = chunk.get("format", "python")
+            if code_content and not auto_run:
+                pending_code = {"language": code_lang, "code": code_content}
+
+        # 收集代码执行结果 (当 auto_run=True 时)
         if chunk_type == "console" and chunk.get("format") == "output":
             output = chunk.get("content", "")
             if output:
                 code_outputs.append(output)
 
+    result = {"text": full_response.strip(), "pending_code": pending_code, "code_output": None}
+
     # 如果有代码输出，附加到响应
     if code_outputs:
-        full_response += "\n\n### 执行结果:\n" + "\n".join(code_outputs)
+        result["code_output"] = "\n".join(code_outputs)
+        result["text"] += "\n\n### 执行结果:\n" + result["code_output"]
 
-    return full_response.strip()
+    return result
 
 
 # ============ API 端点 ============
@@ -213,25 +310,37 @@ async def get_models():
 @app.post("/chat")
 async def chat(request: ChatRequest):
     """
-    自然语言对话 - 核心端点
+    自然语言对话 - 核心端点（带智能路由）
 
-    可以执行任何任务，例如:
-    - "搜索最新的 Python 3.12 新特性"
-    - "读取桌面上的 test.txt 文件"
-    - "写一个 Python 脚本计算斐波那契数列"
-    - "列出当前目录的所有文件"
+    路由规则：
+    - @ 开头或包含关键词 → Agent 模式（可执行代码）
+    - 普通聊天 → 直接 Ollama 回复（更快）
 
-    n8n 配置:
-    - Method: POST
-    - URL: http://host.docker.internal:8000/chat
-    - Body: {"message": "你的指令"}
+    当 auto_run=False 时，返回 pending_code 供用户确认后执行
     """
     try:
-        response = collect_response(request.message, request.auto_run)
-        return {
-            "success": True,
-            "response": response,
-            "timestamp": datetime.now().isoformat()
+        # 智能路由：判断是否需要 Agent
+        use_agent, clean_message = needs_agent(request.message)
+
+        if use_agent:
+            # Agent 模式：使用 interpreter
+            result = collect_response(clean_message, request.auto_run)
+            return {
+                "success": True,
+                "mode": "agent",
+                "response": result["text"],
+                "pending_code": result["pending_code"],
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            # 聊天模式：直接用 Ollama
+            response_text = chat_with_ollama(request.message)
+            return {
+                "success": True,
+                "mode": "chat",
+                "response": response_text,
+                "pending_code": None,
+                "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
