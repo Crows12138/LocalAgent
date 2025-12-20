@@ -31,6 +31,15 @@ ollama pull qwen2.5-coder:14b
 
 ## Quick Start
 
+### API Server (Recommended for Integration)
+
+```bash
+# Start the API server
+python api_server.py
+```
+
+Server runs at `http://localhost:8000`. See [API Endpoints](#api-endpoints) below.
+
 ### Using Qwen 2.5-Coder (Recommended)
 
 ```bash
@@ -179,6 +188,38 @@ The project includes:
 5. **Configuration System**:
    - New dataclass-based configuration
    - Configuration validation
+
+## API Endpoints
+
+The `api_server.py` provides a RESTful API with smart routing:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chat` | POST | Smart chat (auto-routes to Chat or Agent mode) |
+| `/execute` | POST | Execute code directly |
+| `/file/read` | POST | Read file |
+| `/file/write` | POST | Write file |
+| `/shell` | POST | Run shell command |
+| `/reset` | POST | Clear conversation history |
+| `/history` | GET | Get unified conversation history |
+| `/health` | GET | Health check |
+
+### Smart Routing
+
+- **Chat mode**: Simple conversations go directly to Ollama (fast, uses `qwen2.5:1.5b`)
+- **Agent mode**: Requests with `@` prefix or keywords trigger code execution (uses `qwen2.5-coder:14b`)
+
+```bash
+# Chat mode (fast)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "hello", "auto_run": false}'
+
+# Agent mode (prefix with @)
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "@list files on desktop", "auto_run": false}'
+```
 
 ## Supported Languages
 
