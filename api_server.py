@@ -184,7 +184,7 @@ def chat_with_ollama(user_msg: str, system_prompt: str = None) -> str:
         response = requests.post(
             "http://localhost:11434/api/chat",
             json={
-                "model": "qwen2.5:1.5b",
+                "model": "qwen2.5-coder:14b",
                 "messages": messages,
                 "stream": False,
                 "options": {"temperature": 0.7, "num_predict": 100}
