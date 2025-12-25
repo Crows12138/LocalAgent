@@ -298,6 +298,32 @@ async def health_check():
     }
 
 
+@app.get("/context")
+async def get_context():
+    """获取当前窗口上下文（跨平台）"""
+    try:
+        from interpreter_source.core.computer.window import Window
+        window = Window(interpreter.computer)
+        active = window.get_active()
+        if active:
+            return {
+                "success": True,
+                "title": active.title,
+                "app": active.app_name,
+                "pid": active.pid,
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        pass
+    return {
+        "success": False,
+        "title": None,
+        "app": None,
+        "pid": None,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
 @app.get("/models")
 async def get_models():
     """获取 Ollama 模型列表"""
